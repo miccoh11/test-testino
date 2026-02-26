@@ -32,16 +32,18 @@ export default function App() {
         body: JSON.stringify({ url }),
       });
 
-      let data;
-      const contentType = response.headers.get("content-type");
+      const text = await response.text();
       
-      if (contentType && contentType.indexOf("application/json") !== -1) {
-        data = await response.json();
-      } else {
-        // If not JSON, it's likely an HTML error page from the server or proxy
-        const text = await response.text();
-        console.error("Non-JSON response received:", text);
-        throw new Error("Il server ha risposto in modo inaspettato. Riprova tra poco.");
+      if (!text) {
+        throw new Error("Il server ha restituito una risposta vuota. TikTok potrebbe aver bloccato temporaneamente la richiesta da questo server.");
+      }
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error("Errore parsing JSON:", text);
+        throw new Error("Risposta del server non valida. Riprova tra qualche istante.");
       }
 
       if (!response.ok) {
@@ -51,9 +53,7 @@ export default function App() {
       setVideoInfo(data);
     } catch (err: any) {
       console.error("Fetch error:", err);
-      setError(err.message === "Unexpected end of JSON input" 
-        ? "Errore di connessione col server. Riprova." 
-        : err.message);
+      setError(err.message);
     } finally {
       setLoading(false);
     }

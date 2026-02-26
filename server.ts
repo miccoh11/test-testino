@@ -32,25 +32,29 @@ async function startServer() {
         {
           headers: {
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
           },
-          timeout: 15000, // 15 seconds timeout
+          timeout: 20000, // Increase to 20 seconds
         }
       );
 
       const data = apiResponse.data;
 
-      if (!data || data.code !== 0 || !data.data) {
+      if (!data) {
+        throw new Error("Empty response from TikWM API");
+      }
+
+      if (data.code !== 0 || !data.data) {
         console.error("[Server] TikWM API Error Details:", data);
         return res.status(400).json({ 
-          error: data?.msg || "Non è stato possibile recuperare il video. Verifica che il link sia corretto e il video sia pubblico." 
+          error: data?.msg || "Video non trovato o privato. Assicurati che il link sia corretto." 
         });
       }
 
       const videoData = data.data;
       console.log(`[Server] Successfully fetched video: ${videoData.id}`);
       
-      res.json({
+      return res.json({
         id: videoData.id,
         title: videoData.title || "Video TikTok",
         author: videoData.author.nickname,
@@ -61,10 +65,17 @@ async function startServer() {
 
     } catch (error: any) {
       console.error("[Server] Critical Error:", error.message);
+      
       if (error.code === 'ECONNABORTED') {
-        return res.status(504).json({ error: "La richiesta ha impiegato troppo tempo. Riprova tra un istante." });
+        return res.status(504).json({ error: "Il server di TikTok sta impiegando troppo tempo a rispondere. Riprova tra poco." });
       }
-      res.status(500).json({ error: "Il servizio di download è momentaneamente sovraccarico. Riprova tra poco." });
+      
+      // If it's a 429 or similar from the upstream API
+      if (error.response && error.response.status === 429) {
+        return res.status(429).json({ error: "Troppe richieste. Per favore, attendi un minuto prima di riprovare." });
+      }
+
+      return res.status(500).json({ error: "Errore di connessione con i server di TikTok. Riprova tra un istante." });
     }
   });
 
