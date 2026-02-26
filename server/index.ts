@@ -2,10 +2,15 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import axios from "axios";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(cors());
   app.use(express.json());
@@ -66,7 +71,13 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static("dist"));
+    app.use(express.static(path.join(__dirname, "dist")));
+    
+    // Handle SPA routing in production
+    app.get("*", (req, res, next) => {
+      if (req.path.startsWith("/api")) return next();
+      res.sendFile(path.join(__dirname, "dist", "index.html"));
+    });
   }
 
   app.listen(PORT, "0.0.0.0", () => {
