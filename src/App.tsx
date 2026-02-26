@@ -32,15 +32,28 @@ export default function App() {
         body: JSON.stringify({ url }),
       });
 
-      const data = await response.json();
+      let data;
+      const contentType = response.headers.get("content-type");
+      
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        data = await response.json();
+      } else {
+        // If not JSON, it's likely an HTML error page from the server or proxy
+        const text = await response.text();
+        console.error("Non-JSON response received:", text);
+        throw new Error("Il server ha risposto in modo inaspettato. Riprova tra poco.");
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || 'Something went wrong');
+        throw new Error(data.error || 'Si è verificato un errore durante l\'elaborazione.');
       }
 
       setVideoInfo(data);
     } catch (err: any) {
-      setError(err.message);
+      console.error("Fetch error:", err);
+      setError(err.message === "Unexpected end of JSON input" 
+        ? "Errore di connessione col server. Riprova." 
+        : err.message);
     } finally {
       setLoading(false);
     }
@@ -48,6 +61,7 @@ export default function App() {
 
   const handleDownload = () => {
     if (!videoInfo) return;
+    // Create a temporary link to trigger download
     const link = document.createElement('a');
     link.href = videoInfo.videoUrl;
     link.download = `tiktok_${videoInfo.id}.mp4`;
@@ -58,16 +72,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] text-[#1a1a1a] font-sans selection:bg-black selection:text-white">
-      
       {/* Header */}
       <header className="max-w-7xl mx-auto px-6 py-8 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center">
             <Download className="text-white w-5 h-5" />
           </div>
-          <h1 className="text-xl font-semibold tracking-tight">
-            Test Testino
-          </h1>
+          <h1 className="text-xl font-semibold tracking-tight">test-testino</h1>
         </div>
         <div className="hidden sm:flex items-center gap-6 text-sm font-medium text-neutral-500">
           <a href="#how-it-works" className="hover:text-black transition-colors">How it works</a>
@@ -80,7 +91,6 @@ export default function App() {
       </header>
 
       <main className="max-w-3xl mx-auto px-6 pt-12 pb-24">
-
         {/* Hero Section */}
         <div className="text-center mb-12">
           <motion.h2 
@@ -137,7 +147,7 @@ export default function App() {
           </form>
         </motion.div>
 
-        {/* Results */}
+        {/* Results Area */}
         <AnimatePresence mode="wait">
           {error && (
             <motion.div
@@ -150,15 +160,154 @@ export default function App() {
               <p className="text-sm font-medium">{error}</p>
             </motion.div>
           )}
+
+          {videoInfo && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="bg-white rounded-3xl shadow-xl border border-black/5 overflow-hidden"
+            >
+              <div className="flex flex-col md:flex-row">
+                {/* Video Preview */}
+                <div className="md:w-2/5 relative aspect-[9/16] bg-neutral-900">
+                  <img 
+                    src={videoInfo.cover} 
+                    alt="Video cover" 
+                    className="w-full h-full object-cover opacity-80"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30">
+                      <Download className="text-white w-8 h-8" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Info & Actions */}
+                <div className="md:w-3/5 p-8 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-3 mb-6">
+                      <img 
+                        src={videoInfo.avatar} 
+                        alt={videoInfo.author} 
+                        className="w-12 h-12 rounded-full border border-black/5"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div>
+                        <h3 className="font-bold text-lg leading-tight">@{videoInfo.author}</h3>
+                        <p className="text-neutral-500 text-sm">Creatore di contenuti</p>
+                      </div>
+                    </div>
+                    
+                    <p className="text-neutral-600 mb-8 line-clamp-3 italic">
+                      "{videoInfo.title}"
+                    </p>
+
+                    <div className="space-y-3 mb-8">
+                      <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium">
+                        <CheckCircle2 className="w-4 h-4" />
+                        Video pronto per il download
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-neutral-500">
+                        <div className="w-1.5 h-1.5 rounded-full bg-neutral-300" />
+                        Formato: MP4 (HD)
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-neutral-500">
+                        <div className="w-1.5 h-1.5 rounded-full bg-neutral-300" />
+                        Senza Watermark: Sì
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    <button
+                      onClick={handleDownload}
+                      className="w-full bg-black text-white py-4 rounded-2xl font-bold hover:bg-neutral-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-black/10"
+                    >
+                      <Download className="w-5 h-5" />
+                      Scarica Video (No Watermark)
+                    </button>
+                    <a
+                      href={videoInfo.videoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full bg-neutral-100 text-neutral-600 py-4 rounded-2xl font-bold hover:bg-neutral-200 transition-all flex items-center justify-center gap-2"
+                    >
+                      <ExternalLink className="w-5 h-5" />
+                      Apri nel Browser
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
         </AnimatePresence>
 
+        {/* Features Grid */}
+        {!videoInfo && !loading && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-24">
+            <div className="p-6 bg-white rounded-2xl border border-black/5">
+              <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center mb-4">
+                <Download className="text-indigo-600 w-5 h-5" />
+              </div>
+              <h4 className="font-bold mb-2">Download Illimitati</h4>
+              <p className="text-sm text-neutral-500">Scarica quanti video vuoi senza alcuna restrizione.</p>
+            </div>
+            <div className="p-6 bg-white rounded-2xl border border-black/5">
+              <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center mb-4">
+                <CheckCircle2 className="text-emerald-600 w-5 h-5" />
+              </div>
+              <h4 className="font-bold mb-2">No Watermark</h4>
+              <p className="text-sm text-neutral-500">Rimuoviamo automaticamente il logo TikTok dai tuoi video.</p>
+            </div>
+            <div className="p-6 bg-white rounded-2xl border border-black/5">
+              <div className="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center mb-4">
+                <AlertCircle className="text-amber-600 w-5 h-5" />
+              </div>
+              <h4 className="font-bold mb-2">Alta Qualità</h4>
+              <p className="text-sm text-neutral-500">I video vengono scaricati nella massima risoluzione disponibile.</p>
+            </div>
+          </div>
+        )}
+
+        {/* How It Works Section */}
+        <section id="how-it-works" className="mt-32 pt-16 border-t border-black/5">
+          <div className="text-center mb-12">
+            <h3 className="text-3xl font-bold tracking-tight mb-4">Come Funziona</h3>
+            <p className="text-neutral-500">Segui questi semplici passaggi per scaricare i tuoi video preferiti.</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-black text-white rounded-full flex items-center justify-center mx-auto mb-6 font-bold text-xl">1</div>
+              <h4 className="font-bold mb-3 text-lg">Copia il Link</h4>
+              <p className="text-neutral-500 text-sm leading-relaxed">
+                Apri TikTok, trova il video che desideri e clicca su "Condividi", poi seleziona "Copia link".
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="w-12 h-12 bg-black text-white rounded-full flex items-center justify-center mx-auto mb-6 font-bold text-xl">2</div>
+              <h4 className="font-bold mb-3 text-lg">Incolla qui</h4>
+              <p className="text-neutral-500 text-sm leading-relaxed">
+                Torna su questo tool e incolla il link nella barra di ricerca in alto, quindi clicca su "Scarica".
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="w-12 h-12 bg-black text-white rounded-full flex items-center justify-center mx-auto mb-6 font-bold text-xl">3</div>
+              <h4 className="font-bold mb-3 text-lg">Salva il Video</h4>
+              <p className="text-neutral-500 text-sm leading-relaxed">
+                Attendi l'anteprima e clicca sul pulsante di download per salvare il video senza filigrana.
+              </p>
+            </div>
+          </div>
+        </section>
       </main>
 
       {/* Footer */}
       <footer className="max-w-7xl mx-auto px-6 py-12 border-t border-black/5 text-center text-neutral-400 text-sm">
-        <p>© 2026 Test Testino</p>
+        <p>© 2026 test-testino</p>
       </footer>
-
     </div>
   );
 }
