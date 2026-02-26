@@ -24,42 +24,47 @@ async function startServer() {
     }
 
     try {
-      console.log(`Processing URL: ${url}`);
+      console.log(`[Server] Processing TikTok URL: ${url}`);
       
-      // Use tikwm.com API - it's more stable and handles rate limits better
-      // than direct calls to TikTok's internal API from a shared IP.
-      const apiResponse = await axios.post("https://www.tikwm.com/api/", 
+      // Use api.tikwm.com (often more stable for API calls)
+      const apiResponse = await axios.post("https://api.tikwm.com/api/", 
         new URLSearchParams({ url: url }).toString(),
         {
           headers: {
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
           },
+          timeout: 15000, // 15 seconds timeout
         }
       );
 
       const data = apiResponse.data;
 
-      if (data.code !== 0 || !data.data) {
-        console.error("TikWM API Error:", data.msg);
-        return res.status(400).json({ error: data.msg || "Failed to fetch video data. Please check the URL." });
+      if (!data || data.code !== 0 || !data.data) {
+        console.error("[Server] TikWM API Error Details:", data);
+        return res.status(400).json({ 
+          error: data?.msg || "Non è stato possibile recuperare il video. Verifica che il link sia corretto e il video sia pubblico." 
+        });
       }
 
       const videoData = data.data;
+      console.log(`[Server] Successfully fetched video: ${videoData.id}`);
       
-      // Map the response to our expected format
       res.json({
         id: videoData.id,
-        title: videoData.title || "TikTok Video",
+        title: videoData.title || "Video TikTok",
         author: videoData.author.nickname,
         avatar: videoData.author.avatar,
         cover: videoData.cover,
-        videoUrl: videoData.play, // This is the no-watermark URL
+        videoUrl: videoData.play,
       });
 
     } catch (error: any) {
-      console.error("Error fetching TikTok data:", error.message);
-      res.status(500).json({ error: "Service temporarily unavailable. Please try again in a few moments." });
+      console.error("[Server] Critical Error:", error.message);
+      if (error.code === 'ECONNABORTED') {
+        return res.status(504).json({ error: "La richiesta ha impiegato troppo tempo. Riprova tra un istante." });
+      }
+      res.status(500).json({ error: "Il servizio di download è momentaneamente sovraccarico. Riprova tra poco." });
     }
   });
 
@@ -86,3 +91,4 @@ async function startServer() {
 }
 
 startServer();
+
